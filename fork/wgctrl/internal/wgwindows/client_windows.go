@@ -103,9 +103,6 @@ func (c *Client) interfaceHandle(name string) (handle windows.Handle, err error)
 		if err == nil {
 			break
 		}
-		if err == windows.ERROR_FILE_NOT_FOUND {
-			return 0, err
-		}
 	}
 	return
 }

@@ -113,7 +113,7 @@ func (dp *deviceParser) Parse(key, value string) {
 		dp.peers++
 
 		dp.d.Peers = append(dp.d.Peers, wgtypes.Peer{
-			PublicKey: dp.parseKey(value),
+			PublicKey: wgtypes.PubKey(dp.parseKey(value)),
 		})
 		return
 	}
@@ -127,7 +127,7 @@ func (dp *deviceParser) Parse(key, value string) {
 	// Device field parsing.
 	switch key {
 	case "private_key":
-		dp.d.PrivateKey = dp.parseKey(value)
+		dp.d.PrivateKey = wgtypes.PrivKey(dp.parseKey(value))
 	case "listen_port":
 		dp.d.ListenPort = dp.parseInt(value)
 	case "fwmark":
@@ -145,7 +145,7 @@ func (dp *deviceParser) peerParse(key, value string) {
 	p := dp.curPeer()
 	switch key {
 	case "preshared_key":
-		p.PresharedKey = dp.parseKey(value)
+		p.PresharedKey = wgtypes.PSK(dp.parseKey(value))
 	case "endpoint":
 		p.Endpoint = dp.parseAddr(value)
 	case "last_handshake_time_sec":
@@ -177,24 +177,18 @@ func (dp *deviceParser) peerParse(key, value string) {
 }
 
 // parseKey parses a Key from a hex string.
-func (dp *deviceParser) parseKey(s string) wgtypes.Key {
+func (dp *deviceParser) parseKey(s string) []byte {
 	if dp.err != nil {
-		return wgtypes.Key{}
+		return []byte{}
 	}
 
 	b, err := hex.DecodeString(s)
 	if err != nil {
 		dp.err = err
-		return wgtypes.Key{}
+		return []byte{}
 	}
 
-	key, err := wgtypes.NewKey(b)
-	if err != nil {
-		dp.err = err
-		return wgtypes.Key{}
-	}
-
-	return key
+	return b
 }
 
 // parseInt parses an integer from a string.

@@ -9,7 +9,7 @@ import (
 )
 
 func cmdGenPSK(args []string) error {
-	k, err := wgtypes.GenerateKey()
+	k, err := wgtypes.GeneratePresharedKey()
 	if err != nil {
 		return fmt.Errorf("error generating key: %w", err)
 	}
@@ -32,7 +32,7 @@ func cmdGenPubKeyFromStdin(args []string) error {
 	if err := sc.Err(); err != nil {
 		return fmt.Errorf("error reading from stdin: %w", err)
 	}
-	k, err := wgtypes.ParseKey(sc.Text())
+	k, err := wgtypes.ParsePrivateKey(sc.Text())
 	if err != nil {
 		return fmt.Errorf("error parsing input key: %w", err)
 	}

@@ -92,7 +92,7 @@ func buildBatches(cfg wgtypes.Config) []wgtypes.Config {
 
 	// Track the known peers so that peer IPs are not replaced if a single
 	// peer has its allowed IPs split into multiple batches.
-	knownPeers := make(map[wgtypes.Key]struct{})
+	knownPeers := make(map[wgtypes.PubKey]struct{})
 
 	batches := make([]wgtypes.Config, 0)
 	for _, p := range cfg.Peers {

@@ -1,13 +1,12 @@
 package wgtypes
 
 import (
+	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"net"
 	"time"
-
-	"golang.org/x/crypto/curve25519"
 )
 
 // A DeviceType specifies the underlying implementation of a WireGuard device.
@@ -50,10 +49,10 @@ type Device struct {
 	Type DeviceType
 
 	// PrivateKey is the device's private key.
-	PrivateKey Key
+	PrivateKey PrivKey
 
 	// PublicKey is the device's public key, computed from its PrivateKey.
-	PublicKey Key
+	PublicKey PubKey
 
 	// ListenPort is the device's network listening port.
 	ListenPort int
@@ -69,52 +68,45 @@ type Device struct {
 }
 
 // KeyLen is the expected key length for a WireGuard key.
-const KeyLen = 32 // wgh.KeyLen
-
+const PSKLen = 32
 // A Key is a public, private, or pre-shared secret key.  The Key constructor
 // functions in this package can be used to create Keys suitable for each of
 // these applications.
-type Key [KeyLen]byte
+type PSK [PSKLen]byte
+type PrivKey [32]byte
+type PubKey [65]byte
 
 // GenerateKey generates a Key suitable for use as a pre-shared secret key from
 // a cryptographically safe source.
 //
 // The output Key should not be used as a private key; use GeneratePrivateKey
 // instead.
-func GenerateKey() (Key, error) {
-	b := make([]byte, KeyLen)
+func GeneratePresharedKey() (PSK, error) {
+	b := make([]byte, PSKLen)
 	if _, err := rand.Read(b); err != nil {
-		return Key{}, fmt.Errorf("wgtypes: failed to read random bytes: %v", err)
+		return PSK{}, fmt.Errorf("wgtypes: failed to read random bytes: %v", err)
 	}
 
-	return NewKey(b)
+	return PSK(b), nil
 }
 
 // GeneratePrivateKey generates a Key suitable for use as a private key from a
 // cryptographically safe source.
-func GeneratePrivateKey() (Key, error) {
-	key, err := GenerateKey()
+func GeneratePrivateKey() (PrivKey, error) {
+	pk, err := ecdh.P256().GenerateKey(rand.Reader)
 	if err != nil {
-		return Key{}, err
+		return PrivKey{}, err
 	}
 
-	// Modify random bytes using algorithm described at:
-	// https://cr.yp.to/ecdh.html.
-	key[0] &= 248
-	key[31] &= 127
-	key[31] |= 64
-
-	return key, nil
+	return PrivKey(pk.Bytes()), nil
 }
 
-// NewKey creates a Key from an existing byte slice.  The byte slice must be
-// exactly 32 bytes in length.
-func NewKey(b []byte) (Key, error) {
-	if len(b) != KeyLen {
-		return Key{}, fmt.Errorf("wgtypes: incorrect key size: %d", len(b))
+func NewPSK(b []byte) (PSK, error) {
+	if len(b) != PSKLen {
+		return PSK{}, fmt.Errorf("wgtypes: incorrect key size: %d", len(b))
 	}
 
-	var k Key
+	var k PSK
 	copy(k[:], b)
 
 	return k, nil
@@ -122,35 +114,78 @@ func NewKey(b []byte) (Key, error) {
 
 // ParseKey parses a Key from a base64-encoded string, as produced by the
 // Key.String method.
-func ParseKey(s string) (Key, error) {
+func ParsePubKey(s string) (PubKey, error) {
 	b, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
-		return Key{}, fmt.Errorf("wgtypes: failed to parse base64-encoded key: %v", err)
+		return PubKey{}, fmt.Errorf("wgtypes: failed to parse base64-encoded key: %v", err)
 	}
 
-	return NewKey(b)
+	pub, err := ecdh.P256().NewPublicKey(b[:])
+	if err != nil {
+		return PubKey{}, fmt.Errorf("wgtypes: invalid public key: %v", err)
+	}
+
+	return PubKey(pub.Bytes()), nil
+}
+
+
+// ParseKey parses a Key from a base64-encoded string, as produced by the
+// Key.String method.
+func ParsePrivateKey(s string) (PrivKey, error) {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return PrivKey{}, fmt.Errorf("wgtypes: failed to parse base64-encoded key: %v", err)
+	}
+
+	priv, err := ecdh.P256().NewPrivateKey(b)
+	if err != nil {
+		return PrivKey{}, fmt.Errorf("wgtypes: invalid private key: %v", err)
+	}
+
+	return PrivKey(priv.Bytes()), nil
+}
+
+func ParsePSK(s string) (PSK, error) {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return PSK{}, fmt.Errorf("wgtypes: failed to parse base64-encoded key: %v", err)
+	}
+
+	if len(b) != PSKLen {
+		return PSK{}, fmt.Errorf("wgtypes: invalid psk length")
+	}
+
+	return PSK(b), nil
 }
 
 // PublicKey computes a public key from the private key k.
 //
 // PublicKey should only be called when k is a private key.
-func (k Key) PublicKey() Key {
-	var (
-		pub  [KeyLen]byte
-		priv = [KeyLen]byte(k)
-	)
+func (k PrivKey) PublicKey() PubKey {
 
-	// ScalarBaseMult uses the correct base value per https://cr.yp.to/ecdh.html,
-	// so no need to specify it.
-	curve25519.ScalarBaseMult(&pub, &priv)
-
-	return Key(pub)
+	var zero byte
+	for _, b := range k {
+		zero |= b
+	}
+	if zero == 0 {
+		return PubKey([65]byte{})
+	}
+	priv, _ := ecdh.P256().NewPrivateKey(k[:])
+	return PubKey(priv.PublicKey().Bytes())
 }
 
 // String returns the base64-encoded string representation of a Key.
 //
 // ParseKey can be used to produce a new Key from this string.
-func (k Key) String() string {
+func (k PrivKey) String() string {
+	return base64.StdEncoding.EncodeToString(k[:])
+}
+
+func (k PubKey) String() string {
+	return base64.StdEncoding.EncodeToString(k[:])
+}
+
+func (k PSK) String() string {
 	return base64.StdEncoding.EncodeToString(k[:])
 }
 
@@ -159,13 +194,13 @@ type Peer struct {
 	// PublicKey is the public key of a peer, computed from its private key.
 	//
 	// PublicKey is always present in a Peer.
-	PublicKey Key
+	PublicKey PubKey
 
 	// PresharedKey is an optional preshared key which may be used as an
 	// additional layer of security for peer communications.
 	//
 	// A zero-value Key means no preshared key is configured.
-	PresharedKey Key
+	PresharedKey PSK
 
 	// Endpoint is the most recent source address used for communication by
 	// this Peer.
@@ -213,7 +248,7 @@ type Config struct {
 	// PrivateKey specifies a private key configuration, if not nil.
 	//
 	// A non-nil, zero-value Key will clear the private key.
-	PrivateKey *Key
+	PrivateKey *PrivKey
 
 	// ListenPort specifies a device's listening port, if not nil.
 	ListenPort *int
@@ -241,7 +276,7 @@ type Config struct {
 type PeerConfig struct {
 	// PublicKey specifies the public key of this peer.  PublicKey is a
 	// mandatory field for all PeerConfigs.
-	PublicKey Key
+	PublicKey PubKey
 
 	// Remove specifies if the peer with this public key should be removed
 	// from a device's peer list.
@@ -254,7 +289,7 @@ type PeerConfig struct {
 	// PresharedKey specifies a peer's preshared key configuration, if not nil.
 	//
 	// A non-nil, zero-value Key will clear the preshared key.
-	PresharedKey *Key
+	PresharedKey *PSK
 
 	// Endpoint specifies the endpoint of this peer entry, if not nil.
 	Endpoint *net.UDPAddr

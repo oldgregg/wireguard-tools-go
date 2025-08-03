@@ -43,14 +43,14 @@ func cmdShowConf(args []string) error {
 	if d.FirewallMark != 0 {
 		sec.NewKey("FwMark", fmt.Sprintf("0x%x", d.FirewallMark))
 	}
-	if !keyIsZero(d.PrivateKey) {
+	if !keyIsZero(d.PrivateKey[:]) {
 		sec.NewKey("PrivateKey", d.PrivateKey.String())
 	}
 
 	for _, p := range d.Peers {
 		sec, _ = conf.NewSection("Peer")
 		sec.NewKey("PublicKey", p.PublicKey.String())
-		if !keyIsZero(p.PresharedKey) {
+		if !keyIsZero(p.PresharedKey[:]) {
 			sec.NewKey("PresharedKey", p.PresharedKey.String())
 		}
 
@@ -81,7 +81,7 @@ func cmdSetConf(args []string) error {
 	// Reset all existing attributes, if any
 	zero := 0
 	return setConf(args, wgtypes.Config{
-		PrivateKey:   &wgtypes.Key{},
+		PrivateKey:   &wgtypes.PrivKey{},
 		ListenPort:   &zero,
 		FirewallMark: &zero,
 		ReplacePeers: true,
@@ -117,7 +117,7 @@ func cmdSyncConf(args []string) error {
 	// Remove peers that are present on the device but not in loaded config.
 	// Original algorithm:
 	// https://git.zx2c4.com/wireguard-tools/tree/src/setconf.c?id=b4f6b4f229d291daf7c35c6f1e7f4841cc6d69bc#n30
-	peers := make(map[wgtypes.Key]bool)
+	peers := make(map[wgtypes.PubKey]bool)
 	for _, p := range dev.Peers {
 		peers[p.PublicKey] = false
 	}
@@ -220,7 +220,7 @@ func parseINI(file string, cp configParser) error {
 				return parseError(k.Name(), err.Error())
 			}
 		}
-		if keyIsZero(pc.PublicKey) {
+		if keyIsZero(pc.PublicKey[:]) {
 			return parseError("PublicKey", "required field")
 		}
 		cp.Cfg.Peers = append(cp.Cfg.Peers, pc)

@@ -2,7 +2,6 @@ package wguser
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -52,7 +51,7 @@ func (c *Client) configureDevice(device string, cfg wgtypes.Config) error {
 // writeConfig writes textual configuration to w as specified by cfg.
 func writeConfig(w io.Writer, cfg wgtypes.Config) {
 	if cfg.PrivateKey != nil {
-		fmt.Fprintf(w, "private_key=%s\n", hexKey(*cfg.PrivateKey))
+		fmt.Fprintf(w, "private_key=%x\n", cfg.PrivateKey[:])
 	}
 
 	if cfg.ListenPort != nil {
@@ -68,7 +67,7 @@ func writeConfig(w io.Writer, cfg wgtypes.Config) {
 	}
 
 	for _, p := range cfg.Peers {
-		fmt.Fprintf(w, "public_key=%s\n", hexKey(p.PublicKey))
+		fmt.Fprintf(w, "public_key=%x\n", p.PublicKey[:])
 
 		if p.Remove {
 			fmt.Fprintln(w, "remove=true")
@@ -79,7 +78,7 @@ func writeConfig(w io.Writer, cfg wgtypes.Config) {
 		}
 
 		if p.PresharedKey != nil {
-			fmt.Fprintf(w, "preshared_key=%s\n", hexKey(*p.PresharedKey))
+			fmt.Fprintf(w, "preshared_key=%s\n", fmt.Sprintf("%x",*p.PresharedKey))
 		}
 
 		if p.Endpoint != nil {
@@ -98,9 +97,4 @@ func writeConfig(w io.Writer, cfg wgtypes.Config) {
 			fmt.Fprintf(w, "allowed_ip=%s\n", ip.String())
 		}
 	}
-}
-
-// hexKey encodes a wgtypes.Key into a hexadecimal string.
-func hexKey(k wgtypes.Key) string {
-	return hex.EncodeToString(k[:])
 }

@@ -17,7 +17,7 @@ type configParser struct {
 }
 
 func (cp configParser) ParsePrivateKey(s string) error {
-	key, err := wgtypes.ParseKey(s)
+	key, err := wgtypes.ParsePrivateKey(s)
 	if err != nil {
 		return err
 	}
@@ -32,7 +32,7 @@ func (cp configParser) ParsePrivateKeyFromFile(file string) error {
 	}
 	if len(data) == 0 {
 		// An empty file clears the key.
-		cp.Cfg.PrivateKey = &wgtypes.Key{}
+		cp.Cfg.PrivateKey = &wgtypes.PrivKey{}
 		return nil
 	}
 	return cp.ParsePrivateKey(strings.TrimSpace(string(data)))
@@ -67,7 +67,7 @@ type peerConfigParser struct {
 
 func (pcp peerConfigParser) ParsePublicKey(s string) error {
 	var err error
-	pcp.Cfg.PublicKey, err = wgtypes.ParseKey(s)
+	pcp.Cfg.PublicKey, err = wgtypes.ParsePubKey(s)
 	return err
 }
 
@@ -105,7 +105,7 @@ func (pcp peerConfigParser) ParseAllowedIPs(s string) error {
 }
 
 func (pcp peerConfigParser) ParsePresharedKey(s string) error {
-	key, err := wgtypes.ParseKey(s)
+	key, err := wgtypes.ParsePSK(s)
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (pcp peerConfigParser) ParsePresharedKeyFromFile(file string) error {
 	}
 	if len(data) == 0 {
 		// An empty file clears the key.
-		pcp.Cfg.PresharedKey = &wgtypes.Key{}
+		pcp.Cfg.PresharedKey = &wgtypes.PSK{}
 		return nil
 	}
 	return pcp.ParsePresharedKey(strings.TrimSpace(string(data)))

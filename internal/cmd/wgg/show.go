@@ -1,6 +1,7 @@
 package wgg
 
 import (
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -85,7 +86,7 @@ func cmdShowOne(args []string) error {
 
 func prettyPrint(d *wgtypes.Device) {
 	s := fmt.Sprintf("interface: %s\n", d.Name)
-	if !keyIsZero(d.PrivateKey) {
+	if !keyIsZero(d.PrivateKey[:]) {
 		s += fmt.Sprintf("  public key: %s\n", d.PublicKey)
 		s += "  private key: (hidden)\n"
 	}
@@ -99,7 +100,7 @@ func prettyPrint(d *wgtypes.Device) {
 
 	for _, p := range d.Peers {
 		s := fmt.Sprintf("\npeer: %s\n", p.PublicKey)
-		if !keyIsZero(p.PresharedKey) {
+		if !keyIsZero(p.PresharedKey[:]) {
 			s += "  preshared key: (hidden)\n"
 		}
 		if p.Endpoint != nil {
@@ -145,9 +146,9 @@ func printAttr(d *wgtypes.Device, attr string, withIface bool) error {
 
 	switch attr {
 	case "public-key":
-		fmt.Printf("%s%s\n", prefix, maybeKey(d.PublicKey))
+		fmt.Printf("%s%s\n", prefix, maybeKey(d.PublicKey[:]))
 	case "private-key":
-		fmt.Printf("%s%s\n", prefix, maybeKey(d.PrivateKey))
+		fmt.Printf("%s%s\n", prefix, maybeKey(d.PrivateKey[:]))
 	case "listen-port":
 		fmt.Printf("%s%d\n", prefix, d.ListenPort)
 	case "fwmark":
@@ -162,7 +163,7 @@ func printAttr(d *wgtypes.Device, attr string, withIface bool) error {
 		}
 	case "preshared-keys":
 		for _, p := range d.Peers {
-			fmt.Printf("%s%s\t%s\n", prefix, p.PublicKey, maybeKey(p.PresharedKey))
+			fmt.Printf("%s%s\t%s\n", prefix, p.PublicKey, maybeKey(p.PresharedKey[:]))
 		}
 	case "endpoints":
 		for _, p := range d.Peers {
@@ -213,9 +214,9 @@ func printAttr(d *wgtypes.Device, attr string, withIface bool) error {
 	return nil
 }
 
-func maybeKey(key wgtypes.Key) string {
+func maybeKey(key []byte) string {
 	if keyIsZero(key) {
 		return "(none)"
 	}
-	return key.String()
+	return base64.StdEncoding.EncodeToString(key)
 }

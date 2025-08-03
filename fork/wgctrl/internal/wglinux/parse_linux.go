@@ -4,6 +4,7 @@
 package wglinux
 
 import (
+	"crypto/ecdh"
 	"fmt"
 	"net"
 	"time"
@@ -20,7 +21,7 @@ import (
 // from the first message.
 func parseDevice(msgs []genetlink.Message) (*wgtypes.Device, error) {
 	var first wgtypes.Device
-	knownPeers := make(map[wgtypes.Key]int)
+	knownPeers := make(map[wgtypes.PubKey]int)
 
 	for i, m := range msgs {
 		d, err := parseDeviceLoop(m)
@@ -65,9 +66,23 @@ func parseDeviceLoop(m genetlink.Message) (*wgtypes.Device, error) {
 		case unix.WGDEVICE_A_IFNAME:
 			d.Name = ad.String()
 		case unix.WGDEVICE_A_PRIVATE_KEY:
-			ad.Do(parseKey(&d.PrivateKey))
+			ad.Do(func(b []byte) error {
+				priv, err := ecdh.P256().NewPrivateKey(b)
+				if err != nil {
+					return err
+				}
+				d.PrivateKey = wgtypes.PrivKey(priv.Bytes())
+				return nil
+			})
 		case unix.WGDEVICE_A_PUBLIC_KEY:
-			ad.Do(parseKey(&d.PublicKey))
+			ad.Do(func(b []byte) error {
+				pub, err := ecdh.P256().NewPublicKey(b)
+				if err != nil {
+					return err
+				}
+				d.PublicKey = wgtypes.PubKey(pub.Bytes())
+				return nil
+			})
 		case unix.WGDEVICE_A_LISTEN_PORT:
 			d.ListenPort = int(ad.Uint16())
 		case unix.WGDEVICE_A_FWMARK:
@@ -105,9 +120,22 @@ func parsePeer(ad *netlink.AttributeDecoder) wgtypes.Peer {
 	for ad.Next() {
 		switch ad.Type() {
 		case unix.WGPEER_A_PUBLIC_KEY:
-			ad.Do(parseKey(&p.PublicKey))
+			ad.Do(func(b []byte) error {
+				pub, err := ecdh.P256().NewPublicKey(b)
+				if err != nil {
+					return err
+				}
+				p.PublicKey = wgtypes.PubKey(pub.Bytes())
+				return nil
+			})
 		case unix.WGPEER_A_PRESHARED_KEY:
-			ad.Do(parseKey(&p.PresharedKey))
+			ad.Do(func(b []byte) error {
+				if len(b) != wgtypes.PSKLen {
+					return fmt.Errorf("psk was incorrect length")
+				}
+				p.PresharedKey = wgtypes.PSK(b)
+				return nil
+			})
 		case unix.WGPEER_A_ENDPOINT:
 			p.Endpoint = &net.UDPAddr{}
 			ad.Do(parseSockaddr(p.Endpoint))
@@ -173,19 +201,6 @@ func parseAllowedIPs(ipns *[]net.IPNet) func(ad *netlink.AttributeDecoder) error
 			})
 		}
 
-		return nil
-	}
-}
-
-// parseKey parses a wgtypes.Key from a byte slice.
-func parseKey(key *wgtypes.Key) func(b []byte) error {
-	return func(b []byte) error {
-		k, err := wgtypes.NewKey(b)
-		if err != nil {
-			return err
-		}
-
-		*key = k
 		return nil
 	}
 }
@@ -290,7 +305,7 @@ func parseTimespec(t *time.Time) func(b []byte) error {
 
 // mergeDevices merges Peer information from d into target.  mergeDevices is
 // used to deal with multiple incoming netlink messages for the same device.
-func mergeDevices(target, d *wgtypes.Device, knownPeers map[wgtypes.Key]int) {
+func mergeDevices(target, d *wgtypes.Device, knownPeers map[wgtypes.PubKey]int) {
 	for i := range d.Peers {
 		// Peer is already known, append to it's allowed IP networks
 		if peerIndex, ok := knownPeers[d.Peers[i].PublicKey]; ok {
