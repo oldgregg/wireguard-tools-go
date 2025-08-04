@@ -86,6 +86,13 @@ var commandRoot = &command{
 			Func:  cmdGenPubKeyFromStdin,
 			Usage: "wg pubkey",
 		},
+
+		"pkcs11key": {
+			Func:  cmdPkcs11Key,
+			Usage: "wg pkcs11key <interface> <pkcs11 uri>",
+			MinNArgs: 2,
+			MaxNArgs: 2,
+		},
 	},
 }
 

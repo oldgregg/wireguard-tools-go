@@ -1,7 +1,11 @@
 package wgg
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"net"
+	"path/filepath"
 
 	"golang.zx2c4.com/wireguard/wgctrl"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -106,4 +110,30 @@ func parseOnePeerConfigValue(args []string, pcp peerConfigParser) ([]string, boo
 	}
 
 	return args, done, nil
+}
+
+func cmdPkcs11Key(args []string) error {
+	
+	c, err := net.Dial(
+		"unix",
+		filepath.Join("/var/run/wireguard-fips", fmt.Sprintf("%s.sock", args[0])),
+	)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.WriteString(c, fmt.Sprintf("set=1\npkcs11_key=%s\n\n", args[1])); err != nil {
+		return err
+	}
+
+	buf := bufio.NewReader(c)
+	line, _, err := buf.ReadLine()
+	if err != nil {
+		return err
+	}
+	if string(line) != "errno=0" {
+		return fmt.Errorf("received error: %s", string(line))
+	}
+
+	return nil
 }
